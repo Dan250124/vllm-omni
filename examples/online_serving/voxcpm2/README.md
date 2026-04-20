@@ -5,10 +5,11 @@ Serve VoxCPM2 TTS via the OpenAI-compatible `/v1/audio/speech` endpoint.
 ## Start the Server
 
 ```bash
-python -m vllm_omni.entrypoints.openai.api_server \
-    --model openbmb/VoxCPM2 \
+vllm-omni serve VoxCPM2 \
     --stage-configs-path vllm_omni/model_executor/stage_configs/voxcpm2.yaml \
-    --host 0.0.0.0 --port 8000
+    --omni \
+    --host 0.0.0.0 \
+    --port 8000
 ```
 
 ## Zero-shot Synthesis
