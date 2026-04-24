@@ -55,7 +55,13 @@ def main() -> None:
         default=None,
         help="Reference audio for voice cloning (local path, URL, or data: URI)",
     )
-    parser.add_argument("--model", type=str, default="voxcpm2")
+    parser.add_argument(
+        "--voice",
+        type=str,
+        default=None,
+        help="Voice preset name (loaded from server presets). Mutually exclusive with --ref-audio.",
+    )
+    parser.add_argument("--model", type=str, default="openbmb/VoxCPM2")
     parser.add_argument("--output", type=str, default="output.wav")
     parser.add_argument("--api-base", type=str, default=DEFAULT_API_BASE)
     parser.add_argument("--api-key", type=str, default=DEFAULT_API_KEY)
@@ -65,10 +71,12 @@ def main() -> None:
     # VoxCPM2 has no predefined voices. The "voice" field is required by
     # the OpenAI API schema but ignored by VoxCPM2 — use any placeholder.
     # For voice cloning, pass --ref-audio instead.
+    # For voice presets, pass --voice to use a pre-loaded preset.
+    voice_value = args.voice if args.voice else "default"
     payload: dict = {
         "model": args.model,
         "input": args.text,
-        "voice": "default",
+        "voice": voice_value,
         "response_format": args.response_format,
     }
 
@@ -84,6 +92,8 @@ def main() -> None:
     print(f"  text: {args.text}")
     if args.ref_audio:
         print(f"  ref_audio: {args.ref_audio[:80]}...")
+    elif args.voice:
+        print(f"  voice: {args.voice}")
 
     with httpx.Client(timeout=300) as client:
         resp = client.post(

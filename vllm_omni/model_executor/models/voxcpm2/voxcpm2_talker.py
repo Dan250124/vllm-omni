@@ -19,6 +19,7 @@ import time
 from collections.abc import Iterable
 from typing import Any
 
+import librosa
 import torch
 import torch.nn as nn
 from vllm.config import VllmConfig
@@ -29,7 +30,6 @@ from vllm.model_executor.models.utils import (
     WeightsMapper,
     maybe_prefix,
 )
-from vllm.multimodal.audio import AudioResampler
 from vllm.sequence import IntermediateTensors
 
 from vllm_omni.model_executor.models.output_templates import OmniOutput
@@ -94,12 +94,17 @@ def build_voxcpm2_prompt(
     ref_audio: Any | None = None,
     ref_sr: int | None = None,
     ref_text: str | None = None,
+    ref_audio_feat_list: list | None = None,
 ) -> dict[str, Any]:
     """Build a VoxCPM2 prefill prompt whose ``prompt_token_ids`` length matches
     the talker-side prefill length.
 
     Used by both online serving (``serving_speech._build_voxcpm2_prompt``) and
     the offline example, so the talker-side length assertion never fires.
+
+    ``ref_audio_feat_list`` is a pre-computed AudioVAE latent stored as a nested
+    list (for msgpack IPC compatibility).  When provided, ``ref_audio`` is ignored
+    and the pre-computed tensor is used directly, skipping AudioVAE encoding.
     """
     ids = split_multichar_chinese(tokenizer.encode(text, add_special_tokens=True), split_map)
     bos = tokenizer.bos_token_id
@@ -107,7 +112,19 @@ def build_voxcpm2_prompt(
         ids = ids[1:]
     prefill_len = len(ids) + 1  # + audio_start
     additional: dict[str, Any] = {"text_token_ids": [ids]}
-    if ref_audio is not None:
+
+    if ref_audio_feat_list is not None:
+        # Pre-computed latent from voice preset — skip AudioVAE encoding
+        ref_len = len(ref_audio_feat_list)
+        additional["ref_audio_feat_list"] = ref_audio_feat_list
+        if ref_text is not None:
+            additional["prompt_text"] = [ref_text]
+        # The talker always uses _make_ref_prefix (ref_start + ref_len +
+        # ref_end) for reference mode, regardless of whether ref_text is
+        # provided.  ref_text alone (without prompt_audio) does not add
+        # extra text tokens to the scaffold prefix.
+        prefill_len += ref_len + 2  # ref_start / ref_end
+    elif ref_audio is not None:
         vae = hf_config.audio_vae_config
         patch_samples = hf_config.patch_size * math.prod(vae["encoder_rates"])
         ref_len = math.ceil(math.ceil(len(ref_audio) * vae["sample_rate"] / ref_sr) / patch_samples)
@@ -145,8 +162,7 @@ def _encode_raw_audio(
     encode_sr = tts._encode_sample_rate
     if sr != encode_sr:
         audio_np = audio.squeeze(0).numpy()
-        resampler = AudioResampler(target_sr=encode_sr)
-        audio_np = resampler.resample(audio_np, orig_sr=sr)
+        audio_np = librosa.resample(audio_np, orig_sr=sr, target_sr=encode_sr)
         audio = torch.from_numpy(audio_np).unsqueeze(0)
 
     patch_len = tts.patch_size * tts.chunk_size
@@ -498,11 +514,16 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
         ref_audio: Any = None,
         prompt_audio: Any = None,
         prompt_text: str | None = None,
+        ref_audio_feat_list: list | None = None,
     ) -> dict | None:
         """Build prompt cache, handling both file paths and raw audio data.
 
         The OpenAI speech API sends decoded audio as [samples_list, sr]
         via ``_resolve_ref_audio``, while offline usage sends file paths.
+
+        ``ref_audio_feat_list`` is a pre-computed AudioVAE latent (nested list
+        for msgpack IPC).  When provided, it is reconstructed as a tensor and
+        used directly, skipping AudioVAE encoding.
         """
         tts = self.tts
 
@@ -516,20 +537,25 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
                 and isinstance(v[0], (list, torch.Tensor))
             )
 
-        if not _is_raw_audio(ref_audio) and not _is_raw_audio(prompt_audio):
-            return tts.build_prompt_cache(
-                prompt_text=prompt_text,
-                prompt_wav_path=prompt_audio,
-                reference_wav_path=ref_audio,
-            )
-
         cache: dict[str, Any] = {}
-        if ref_audio is not None:
+
+        # Pre-computed latent from voice preset — skip encoding
+        if ref_audio_feat_list is not None:
+            cache["ref_audio_feat"] = torch.tensor(ref_audio_feat_list, dtype=torch.float32)
+        elif ref_audio is not None:
             if _is_raw_audio(ref_audio):
                 samples, sr = ref_audio
                 cache["ref_audio_feat"] = _encode_raw_audio(tts, samples, sr)
             else:
                 cache["ref_audio_feat"] = tts._encode_wav(ref_audio, padding_mode="right")
+
+        # For file-path based inputs (no raw audio, no preset), delegate to native
+        if not cache and not _is_raw_audio(prompt_audio):
+            return tts.build_prompt_cache(
+                prompt_text=prompt_text,
+                prompt_wav_path=prompt_audio,
+                reference_wav_path=ref_audio,
+            )
 
         if prompt_audio is not None and prompt_text is not None:
             cache["prompt_text"] = prompt_text
@@ -1144,6 +1170,7 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
             ref_audio = info_dict.get("reference_audio") or info_dict.get("ref_audio")
             prompt_audio = info_dict.get("prompt_audio")
             prompt_text = info_dict.get("prompt_text")
+            ref_audio_feat_list = info_dict.get("ref_audio_feat_list")
             if isinstance(ref_audio, list):
                 ref_audio = ref_audio[0] if ref_audio else None
             if isinstance(prompt_audio, list):
@@ -1152,12 +1179,13 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
                 prompt_text = prompt_text[0] if prompt_text else None
 
             state.prompt_cache = None
-            if ref_audio or (prompt_audio and prompt_text):
+            if ref_audio or ref_audio_feat_list or (prompt_audio and prompt_text):
                 try:
                     state.prompt_cache = self._build_prompt_cache(
                         ref_audio=ref_audio,
                         prompt_audio=prompt_audio,
                         prompt_text=prompt_text,
+                        ref_audio_feat_list=ref_audio_feat_list,
                     )
                 except Exception as e:
                     logger.warning("build_prompt_cache failed: %s", e)
