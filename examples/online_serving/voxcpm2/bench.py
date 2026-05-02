@@ -129,7 +129,6 @@ class BenchStats:
         if not values:
             return
         s = sorted(values)
-        n = len(s)
         print(f"\n  {label}:")
         print(f"    Min:              {fmt.format(s[0])}")
         print(f"    Mean:             {fmt.format(statistics.mean(s))}")
