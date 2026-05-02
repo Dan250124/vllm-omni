@@ -1082,6 +1082,11 @@ class Orchestrator:
         all_ids_to_abort = self._cfg_tracker.abort_parents(request_ids)
         for stage_id in range(self.num_stages):
             await self.stage_clients[stage_id].abort_requests_async(all_ids_to_abort)
+            # Clean up OutputProcessor state (e.g. mm_accumulated tensors) that
+            # would otherwise leak — normal completion cleans up via
+            # process_outputs(), but aborted requests never produce an
+            # EngineCoreOutput, so we must purge them explicitly.
+            self.output_processors[stage_id].abort_requests(all_ids_to_abort, internal=True)
         for req_id in all_ids_to_abort:
             self.request_states.pop(req_id, None)
         logger.info("[Orchestrator] Aborted request(s) %s", request_ids)
