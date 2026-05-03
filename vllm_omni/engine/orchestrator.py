@@ -873,6 +873,13 @@ class Orchestrator:
 
         if processed.reqs_to_abort:
             await self.stage_clients[stage_id].abort_requests_async(processed.reqs_to_abort)
+            # Same cleanup as _handle_abort — engine-driven aborts (stop
+            # token, max tokens, etc.) also skip the normal process_outputs()
+            # completion path, so accumulated CPU tensors in OmniRequestState
+            # and OutputProcessor would leak.
+            self.output_processors[stage_id].abort_requests(processed.reqs_to_abort, internal=True)
+            for req_id in processed.reqs_to_abort:
+                self.request_states.pop(req_id, None)
 
         if raw_outputs.scheduler_stats is not None:
             processor.update_scheduler_stats(raw_outputs.scheduler_stats)
