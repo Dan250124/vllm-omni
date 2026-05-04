@@ -1,0 +1,204 @@
+=======================================================
+  Qwen3 TTS Benchmark Results
+=======================================================
+  concurrency: 1
+  Total requests:    200
+  Successful:        198
+  Failed:            2
+  Success rate:      99.0%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.150
+    Mean:             0.163
+    Median (P50):     0.162
+    P90:              0.171
+    P95:              0.178
+    P99:              0.187
+    Max:              0.218
+
+  Latency (seconds):
+    Min:              0.321
+    Mean:             0.699
+    Median (P50):     0.671
+    P90:              0.951
+    P95:              1.129
+    P99:              1.356
+    Max:              1.365
+
+  Audio duration (seconds):
+    Min:              1.760
+    Mean:             4.322
+    Max:              8.720
+    Total:            855.76
+
+  Total audio bytes:  41,085,192
+=======================================================
+
+  Wall time:             146.77s
+  Throughput:            1.36 req/s
+  Success throughput:    1.35 req/s
+
+
+
+=======================================================
+  Qwen3 TTS Benchmark Results
+=======================================================
+  concurrency: 2
+  Total requests:    200
+  Successful:        199
+  Failed:            1
+  Success rate:      99.5%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.179
+    Mean:             0.196
+    Median (P50):     0.194
+    P90:              0.205
+    P95:              0.212
+    P99:              0.235
+    Max:              0.282
+
+  Latency (seconds):
+    Min:              0.313
+    Mean:             0.777
+    Median (P50):     0.746
+    P90:              1.018
+    P95:              1.167
+    P99:              1.541
+    Max:              1.735
+
+  Audio duration (seconds):
+    Min:              1.600
+    Mean:             3.992
+    Max:              8.240
+    Total:            794.40
+
+  Total audio bytes:  38,139,956
+=======================================================
+
+  Wall time:             79.76s
+  Throughput:            2.51 req/s
+  Success throughput:    2.50 req/s  
+
+
+=======================================================
+  Qwen3 TTS Benchmark Results
+=======================================================
+  concurrency: 3
+  Total requests:    200
+  Successful:        199
+  Failed:            1
+  Success rate:      99.5%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.191
+    Mean:             0.210
+    Median (P50):     0.207
+    P90:              0.226
+    P95:              0.233
+    P99:              0.250
+    Max:              0.253
+
+  Latency (seconds):
+    Min:              0.355
+    Mean:             0.869
+    Median (P50):     0.801
+    P90:              1.223
+    P95:              1.424
+    P99:              1.700
+    Max:              1.844
+
+  Audio duration (seconds):
+    Min:              1.760
+    Mean:             4.153
+    Max:              8.320
+    Total:            826.40
+
+  Total audio bytes:  39,675,956
+=======================================================
+
+  Wall time:             59.53s
+  Throughput:            3.36 req/s
+  Success throughput:    3.34 req/s
+
+
+=======================================================
+  Qwen3 TTS Benchmark Results
+=======================================================
+  concurrency: 4
+  Total requests:    200
+  Successful:        198
+  Failed:            2
+  Success rate:      99.0%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.193
+    Mean:             0.231
+    Median (P50):     0.228
+    P90:              0.245
+    P95:              0.252
+    P99:              0.302
+    Max:              0.303
+
+  Latency (seconds):
+    Min:              0.379
+    Mean:             0.954
+    Median (P50):     0.926
+    P90:              1.274
+    P95:              1.451
+    P99:              1.786
+    Max:              1.851
+
+  Audio duration (seconds):
+    Min:              1.520
+    Mean:             4.155
+    Max:              8.240
+    Total:            822.64
+
+  Total audio bytes:  39,495,432
+=======================================================
+
+  Wall time:             50.27s
+  Throughput:            3.98 req/s
+  Success throughput:    3.94 req/s
+
+
+=======================================================
+  Qwen3 TTS Benchmark Results
+=======================================================
+  concurrency: 10
+  Total requests:    200
+  Successful:        199
+  Failed:            1
+  Success rate:      99.5%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.255
+    Mean:             0.369
+    Median (P50):     0.354
+    P90:              0.396
+    P95:              0.507
+    P99:              0.737
+    Max:              0.739
+
+  Latency (seconds):
+    Min:              0.586
+    Mean:             1.496
+    Median (P50):     1.410
+    P90:              2.078
+    P95:              2.719
+    P99:              3.344
+    Max:              3.650
+
+  Audio duration (seconds):
+    Min:              1.600
+    Mean:             4.068
+    Max:              8.320
+    Total:            809.52
+
+  Total audio bytes:  38,865,716
+=======================================================
+
+  Wall time:             31.29s
+  Throughput:            6.39 req/s
+  Success throughput:    6.36 req/s

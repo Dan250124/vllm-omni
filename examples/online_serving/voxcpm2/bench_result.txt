@@ -1,0 +1,204 @@
+=======================================================
+  VoxCPM2 TTS Benchmark Results
+=======================================================
+  Concurrency:  1
+  Total requests:    200
+  Successful:        198
+  Failed:            2
+  Success rate:      99.0%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.093
+    Mean:             0.105
+    Median (P50):     0.102
+    P90:              0.111
+    P95:              0.116
+    P99:              0.169
+    Max:              0.327
+
+  Latency (seconds):
+    Min:              0.150
+    Mean:             0.405
+    Median (P50):     0.384
+    P90:              0.574
+    P95:              0.640
+    P99:              0.994
+    Max:              1.926
+
+  Audio duration (seconds):
+    Min:              1.280
+    Mean:             3.921
+    Max:              20.640
+    Total:            776.32
+
+  Total audio bytes:  74,535,432
+=======================================================
+
+  Wall time:             88.63s
+  Throughput:            2.26 req/s
+  Success throughput:    2.23 req/s
+
+
+
+=======================================================
+  VoxCPM2 TTS Benchmark Results
+=======================================================
+  Concurrency:  2
+  Total requests:    200
+  Successful:        198
+  Failed:            2
+  Success rate:      99.0%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.131
+    Mean:             0.178
+    Median (P50):     0.175
+    P90:              0.190
+    P95:              0.200
+    P99:              0.253
+    Max:              0.287
+
+  Latency (seconds):
+    Min:              0.232
+    Mean:             0.686
+    Median (P50):     0.666
+    P90:              0.987
+    P95:              1.084
+    P99:              1.357
+    Max:              1.973
+
+  Audio duration (seconds):
+    Min:              1.120
+    Mean:             3.901
+    Max:              12.000
+    Total:            772.48
+
+  Total audio bytes:  74,166,792
+=======================================================
+
+  Wall time:             72.42s
+  Throughput:            2.76 req/s
+  Success throughput:    2.73 req/s
+
+
+
+=======================================================
+  VoxCPM2 TTS Benchmark Results
+=======================================================
+  Concurrency:  3
+  Total requests:    200
+  Successful:        198
+  Failed:            2
+  Success rate:      99.0%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.202
+    Mean:             0.247
+    Median (P50):     0.242
+    P90:              0.262
+    P95:              0.274
+    P99:              0.357
+    Max:              0.390
+
+  Latency (seconds):
+    Min:              0.352
+    Mean:             0.924
+    Median (P50):     0.899
+    P90:              1.212
+    P95:              1.631
+    P99:              2.049
+    Max:              2.504
+
+  Audio duration (seconds):
+    Min:              1.280
+    Mean:             3.792
+    Max:              10.880
+    Total:            750.72
+
+  Total audio bytes:  72,077,832
+=======================================================
+
+  Wall time:             64.14s
+  Throughput:            3.12 req/s
+  Success throughput:    3.09 req/s
+
+=======================================================
+  VoxCPM2 TTS Benchmark Results
+=======================================================
+  Concurrency:  4
+  Total requests:    200
+  Successful:        200
+  Failed:            0
+  Success rate:      100.0%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.217
+    Mean:             0.311
+    Median (P50):     0.307
+    P90:              0.332
+    P95:              0.337
+    P99:              0.410
+    Max:              0.490
+
+  Latency (seconds):
+    Min:              0.497
+    Mean:             1.222
+    Median (P50):     1.184
+    P90:              1.629
+    P95:              1.911
+    P99:              2.452
+    Max:              2.775
+
+  Audio duration (seconds):
+    Min:              1.440
+    Mean:             3.982
+    Max:              9.440
+    Total:            796.48
+
+  Total audio bytes:  76,470,880
+=======================================================
+
+  Wall time:             61.83s
+  Throughput:            3.23 req/s
+  Success throughput:    3.23 req/s
+
+
+=======================================================
+  VoxCPM2 TTS Benchmark Results
+=======================================================
+  Concurrency:  10
+  Total requests:    200
+  Successful:        189
+  Failed:            11
+  Success rate:      94.5%
+
+  RTF (Real-Time Factor, lower=better):
+    Min:              0.349
+    Mean:             0.840
+    Median (P50):     0.793
+    P90:              1.088
+    P95:              1.275
+    P99:              1.798
+    Max:              1.951
+
+  Latency (seconds):
+    Min:              1.236
+    Mean:             2.894
+    Median (P50):     2.897
+    P90:              3.668
+    P95:              3.758
+    P99:              3.949
+    Max:              3.995
+
+  Audio duration (seconds):
+    Min:              1.440
+    Mean:             3.710
+    Max:              8.480
+    Total:            701.28
+
+  Total audio bytes:  67,331,196
+=======================================================
+
+  Wall time:             60.44s
+  Throughput:            3.31 req/s
+  Success throughput:    3.13 req/s
