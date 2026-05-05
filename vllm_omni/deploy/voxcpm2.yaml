@@ -13,7 +13,7 @@
 #   Uncomment and set custom_voice_dir to a directory containing
 #   pre-computed speaker profiles (custom_voice_manifest.json + .safetensors).
 #   See examples/online_serving/text_to_speech/voxcpm2/ for details.
-#custom_voice_dir: "./custom_voices"
+#custom_voice_dir: "OpenBMB/VoxCPM2/custom_voices"
 
 
 async_chunk: false
