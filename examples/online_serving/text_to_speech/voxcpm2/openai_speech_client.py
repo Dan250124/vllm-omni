@@ -12,6 +12,11 @@ Examples:
     python openai_speech_client.py --text "Hello world" \
         --ref-audio "https://example.com/reference.wav"
 
+    # Custom voice (pre-computed speaker profile)
+    VLLM_OMNI_VOXCPM2_CUSTOM_VOICE_DIR=./custom_voices \\
+    vllm serve openbmb/VoxCPM2 --omni --host 0.0.0.0 --port 8000
+    python openai_speech_client.py --text "Hello world" --voice alice
+
 Server setup:
     vllm serve openbmb/VoxCPM2 --omni --host 0.0.0.0 --port 8000
 """
@@ -55,6 +60,13 @@ def main() -> None:
         default=None,
         help="Reference audio for voice cloning (local path, URL, or data: URI)",
     )
+    parser.add_argument(
+        "--voice",
+        type=str,
+        default="default",
+        help="Voice name: 'default' for zero-shot, or a custom voice name "
+        "(requires VLLM_OMNI_VOXCPM2_CUSTOM_VOICE_DIR on the server)",
+    )
     parser.add_argument("--model", type=str, default="voxcpm2")
     parser.add_argument("--output", type=str, default="output.wav")
     parser.add_argument("--api-base", type=str, default=DEFAULT_API_BASE)
@@ -62,13 +74,10 @@ def main() -> None:
     parser.add_argument("--response-format", type=str, default="wav")
     args = parser.parse_args()
 
-    # VoxCPM2 has no predefined voices. The "voice" field is required by
-    # the OpenAI API schema but ignored by VoxCPM2 — use any placeholder.
-    # For voice cloning, pass --ref-audio instead.
     payload: dict = {
         "model": args.model,
         "input": args.text,
-        "voice": "default",
+        "voice": args.voice,
         "response_format": args.response_format,
     }
 
@@ -82,6 +91,7 @@ def main() -> None:
     url = f"{args.api_base}/v1/audio/speech"
     print(f"POST {url}")
     print(f"  text: {args.text}")
+    print(f"  voice: {args.voice}")
     if args.ref_audio:
         print(f"  ref_audio: {args.ref_audio[:80]}...")
 

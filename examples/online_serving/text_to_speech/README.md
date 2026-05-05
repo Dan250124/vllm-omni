@@ -360,8 +360,86 @@ python voxcpm2/openai_speech_client.py --text "Hello, this is VoxCPM2."
 python voxcpm2/openai_speech_client.py \
     --text "This should sound like the reference speaker." \
     --ref-audio /path/to/reference.wav
+
+# Custom voice (pre-computed speaker profile)
+python voxcpm2/openai_speech_client.py --text "Hello world" --voice alice
 ```
 The `ref_audio` field accepts local file paths (auto-base64), HTTP URLs, or `data:audio/wav;base64,...` data URIs.
+
+### Custom Voice (pre-computed speaker profiles)
+
+Pre-compute speaker profiles offline to avoid per-request AudioVAE encoding:
+
+```bash
+# 1. Pre-compute a custom voice from reference audio
+python voxcpm2/precompute_custom_voice.py \
+    --model openbmb/VoxCPM2 \
+    --voice-name alice \
+    --ref-audio /path/to/alice_ref.wav \
+    --output-dir ./custom_voices/
+```
+
+This produces `./custom_voices/custom_voice_manifest.json` and per-voice `.safetensors` files.
+
+```bash
+# 2. Configure custom_voice_dir in the deploy YAML
+```
+
+Edit `vllm_omni/deploy/voxcpm2.yaml` (or your own deploy config) to point to the voice directory:
+
+```yaml
+custom_voice_dir: "./custom_voices"
+```
+
+Alternatively, pass it inline when no deploy config is used:
+
+```bash
+# Override via --deploy-config or set custom_voice_dir in your YAML
+vllm serve openbmb/VoxCPM2 --omni --host 0.0.0.0 --port 8000
+```
+
+```bash
+# 3. Use the voice by name — no ref_audio needed per request
+python voxcpm2/openai_speech_client.py --text "Hello world" --voice alice
+
+# Or via curl
+curl -X POST http://localhost:8000/v1/audio/speech \
+    -H "Content-Type: application/json" \
+    -d '{
+        "input": "Hello world",
+        "voice": "alice",
+        "response_format": "wav"
+    }' --output custom_voice.wav
+```
+
+Three modes are available:
+
+| Mode | CLI flags | Description |
+|------|-----------|-------------|
+| **reference** | `--ref-audio` | Voice cloning only. The model extracts speaker identity from the reference audio. |
+| **continuation** | `--ref-audio --ref-text` | Same audio serves as both voice reference and acoustic context, improving prosody. Requires an accurate transcript. |
+| **ref_continuation** | `--ref-audio --prompt-audio --prompt-text` | Separate reference and prompt audio. Useful when you have a high-quality short clip for voice identity and a longer natural recording for acoustic context. |
+
+For most use cases, `reference` mode is sufficient. The `continuation` modes can improve naturalness when you have accurate transcripts, but incorrect transcripts may degrade quality.
+
+```bash
+# Continuation mode (provides acoustic context for better prosody)
+python voxcpm2/precompute_custom_voice.py \
+    --model openbmb/VoxCPM2 \
+    --voice-name alice \
+    --ref-audio /path/to/alice_ref.wav \
+    --ref-text "Transcript of the reference audio" \
+    --output-dir ./custom_voices/
+
+# Ref-continuation mode (separate ref and prompt audio)
+python voxcpm2/precompute_custom_voice.py \
+    --model openbmb/VoxCPM2 \
+    --voice-name alice \
+    --ref-audio /path/to/alice_ref.wav \
+    --prompt-audio /path/to/alice_prompt.wav \
+    --prompt-text "Transcript of the prompt audio" \
+    --output-dir ./custom_voices/
+```
 
 ### Gradio demo (gapless streaming via AudioWorklet)
 ```bash

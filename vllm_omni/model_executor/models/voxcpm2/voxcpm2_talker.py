@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import json
 import logging
 import math
 import os
@@ -95,12 +96,18 @@ def build_voxcpm2_prompt(
     ref_audio: Any | None = None,
     ref_sr: int | None = None,
     ref_text: str | None = None,
+    voice_name: str | None = None,
+    custom_voice_manifest_path: str | None = None,
 ) -> dict[str, Any]:
     """Build a VoxCPM2 prefill prompt whose ``prompt_token_ids`` length matches
     the talker-side prefill length.
 
     Used by both online serving (``serving_speech._build_voxcpm2_prompt``) and
     the offline example, so the talker-side length assertion never fires.
+
+    When *voice_name* is provided (custom voice), the serving layer looks up the
+    pre-computed ``extra_prefill_tokens`` from the manifest to compute the
+    correct prefill length without sending reference audio.
     """
     ids = split_multichar_chinese(tokenizer.encode(text, add_special_tokens=True), split_map)
     bos = tokenizer.bos_token_id
@@ -108,6 +115,7 @@ def build_voxcpm2_prompt(
         ids = ids[1:]
     prefill_len = len(ids) + 1  # + audio_start
     additional: dict[str, Any] = {"text_token_ids": [ids]}
+
     if ref_audio is not None:
         vae = hf_config.audio_vae_config
         patch_samples = hf_config.patch_size * math.prod(vae["encoder_rates"])
@@ -122,6 +130,21 @@ def build_voxcpm2_prompt(
         else:
             additional["reference_audio"] = [[ref_audio, ref_sr]]
             prefill_len += ref_len + 2  # ref_start / ref_end
+    elif voice_name and custom_voice_manifest_path:
+        # Custom voice: read extra_prefill_tokens from manifest.
+        additional["voice_name"] = voice_name
+        try:
+            with open(custom_voice_manifest_path) as f:
+                manifest = json.load(f)
+            voice_info = manifest.get("voices", {}).get(voice_name)
+            if voice_info is None:
+                raise ValueError(f"Custom voice '{voice_name}' not found in manifest")
+            extra = voice_info.get("extra_prefill_tokens", 0)
+            prefill_len += extra
+        except Exception as e:
+            logger.warning("Failed to load custom voice manifest for '%s': %s", voice_name, e)
+            raise
+
     prompt = tokens_input(prompt_token_ids=[1] * prefill_len)
     prompt["additional_information"] = additional
     return prompt
@@ -468,6 +491,62 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
         # one-shot by design: fires at most once per process to avoid log spam.
         self._active_state_warned = False
 
+        # Custom voice speaker profiles: pre-computed VAE features loaded from
+        # custom_voice_dir at startup.  When a request specifies voice_name,
+        # _build_prompt_cache returns the cached dict directly (no VAE encoding).
+        self._custom_voice_dir: str | None = None
+        self._speaker_profiles: dict[str, dict[str, Any]] = {}
+
+        # Resolve custom_voice_dir from deploy config (injected into hf_config).
+        _cv_dir = getattr(self.config, "custom_voice_dir", None)
+        if _cv_dir:
+            self._custom_voice_dir = _cv_dir
+            self._load_speaker_profiles()
+
+    def _load_speaker_profiles(self) -> None:
+        """Load pre-computed custom voice features from custom_voice_dir."""
+        if not self._custom_voice_dir:
+            return
+        manifest_path = os.path.join(self._custom_voice_dir, "custom_voice_manifest.json")
+        if not os.path.exists(manifest_path):
+            logger.warning("custom_voice_dir set (%s) but no custom_voice_manifest.json found", self._custom_voice_dir)
+            return
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Failed to read custom_voice_manifest.json: %s", e)
+            return
+
+        from safetensors import safe_open
+
+        for name, info in manifest.get("voices", {}).items():
+            file_path = os.path.join(self._custom_voice_dir, info["file"])
+            if not os.path.exists(file_path):
+                logger.warning("Speaker profile file not found: %s", file_path)
+                continue
+            try:
+                tensors: dict[str, torch.Tensor] = {}
+                with safe_open(file_path, framework="pt") as f:
+                    for key in f.keys():
+                        tensors[key] = f.get_tensor(key)
+                entry: dict[str, Any] = {"mode": info["mode"], "ref_audio_feat": tensors["ref_audio_feat"]}
+                if "audio_feat" in tensors:
+                    entry["audio_feat"] = tensors["audio_feat"]
+                    entry["prompt_text"] = info.get("prompt_text", "")
+                if "ref_text" in info:
+                    entry["ref_text"] = info["ref_text"]
+                self._speaker_profiles[name] = entry
+            except Exception as e:
+                logger.warning("Failed to load speaker profile '%s': %s", name, e)
+        if self._speaker_profiles:
+            logger.info(
+                "Loaded %d custom voice speaker profiles from %s: %s",
+                len(self._speaker_profiles),
+                self._custom_voice_dir,
+                ", ".join(sorted(self._speaker_profiles.keys())),
+            )
+
     @property
     def tts(self) -> nn.Module:
         return self._tts
@@ -515,13 +594,23 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
         ref_audio: Any = None,
         prompt_audio: Any = None,
         prompt_text: str | None = None,
+        voice_name: str | None = None,
     ) -> dict | None:
         """Build prompt cache, handling both file paths and raw audio data.
 
         The OpenAI speech API sends decoded audio as [samples_list, sr]
         via ``_resolve_ref_audio``, while offline usage sends file paths.
+
+        When *voice_name* matches a pre-loaded custom voice, the cached
+        speaker profile is returned directly (no VAE encoding).
         """
         tts = self.tts
+
+        # Fast path: pre-computed custom voice — skip VAE encoding.
+        if voice_name and ref_audio is None and prompt_audio is None:
+            profile = self._speaker_profiles.get(voice_name)
+            if profile is not None:
+                return dict(profile)
 
         def _is_raw_audio(v: Any) -> bool:
             import numbers
@@ -1153,10 +1242,11 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
             state.curr_prefix_feat_cond = None
             state.is_stopping = False
 
-            # Voice clone / continuation
+            # Voice clone / continuation / custom voice
             ref_audio = info_dict.get("reference_audio") or info_dict.get("ref_audio")
             prompt_audio = info_dict.get("prompt_audio")
             prompt_text = info_dict.get("prompt_text")
+            voice_name = info_dict.get("voice_name")
             if isinstance(ref_audio, list):
                 ref_audio = ref_audio[0] if ref_audio else None
             if isinstance(prompt_audio, list):
@@ -1165,12 +1255,13 @@ class VoxCPM2TalkerForConditionalGeneration(nn.Module):
                 prompt_text = prompt_text[0] if prompt_text else None
 
             state.prompt_cache = None
-            if ref_audio or (prompt_audio and prompt_text):
+            if ref_audio or (prompt_audio and prompt_text) or voice_name:
                 try:
                     state.prompt_cache = self._build_prompt_cache(
                         ref_audio=ref_audio,
                         prompt_audio=prompt_audio,
                         prompt_text=prompt_text,
+                        voice_name=voice_name,
                     )
                 except Exception as e:
                     logger.warning("build_prompt_cache failed: %s", e)

@@ -514,8 +514,20 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
         self._voxcpm2_encode("")  # lazy-init tokenizer + split_map
         ref_audio = None
         ref_sr = None
+        voice_name = None
+        custom_voice_manifest_path = None
+
         if request.ref_audio is not None:
             ref_audio, ref_sr = await self._resolve_ref_audio(request.ref_audio)
+        elif request.voice and request.voice.lower() != "default":
+            # Try custom voice (pre-computed speaker profile).
+            cv_dir = getattr(self.engine_client.model_config.hf_config, "custom_voice_dir", None)
+            if cv_dir:
+                manifest = os.path.join(cv_dir, "custom_voice_manifest.json")
+                if os.path.exists(manifest):
+                    voice_name = request.voice
+                    custom_voice_manifest_path = manifest
+
         return build_voxcpm2_prompt(
             hf_config=self.engine_client.model_config.hf_config,
             tokenizer=self._voxcpm2_tokenizer,
@@ -524,6 +536,8 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
             ref_audio=ref_audio,
             ref_sr=ref_sr,
             ref_text=request.ref_text,
+            voice_name=voice_name,
+            custom_voice_manifest_path=custom_voice_manifest_path,
         )
 
     def _get_uploaded_audio_data(self, voice_name: str) -> str | None:
@@ -1820,9 +1834,10 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
         else:
             model_type = "generic"
         logger.info(
-            "TTS speech request %s: text=%r, model=%s",
+            "TTS speech request %s: text=%r, voice=%r, model=%s",
             request_id,
             request.input[:50] + "..." if len(request.input) > 50 else request.input,
+            request.voice,
             model_type,
         )
 

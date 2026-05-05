@@ -467,6 +467,13 @@ def build_vllm_config(
     )
     executor_class = Executor.get_class(vllm_config)
 
+    # Inject yaml_extras fields into hf_config so models can access them
+    # via self.config (vllm_config.model_config.hf_config).
+    for attr in ("custom_voice_dir",):
+        val = getattr(stage_config, attr, None)
+        if val is not None:
+            setattr(vllm_config.model_config.hf_config, attr, val)
+
     # Upgrade vanilla INCConfig to OmniINCConfig for multi-stage models.
     upgraded = OmniINCConfig.maybe_upgrade(vllm_config.quant_config)
     if upgraded is not vllm_config.quant_config:

@@ -447,6 +447,9 @@ class DeployConfig:
     data_parallel_size: int = 1
     pipeline_parallel_size: int = 1
 
+    # Model-specific settings (not engine args, propagated via yaml_extras)
+    custom_voice_dir: str | None = None
+
 
 _STAGE_NON_ENGINE_KEYS = frozenset(
     {
@@ -598,7 +601,11 @@ def load_deploy_config(path: str | Path) -> DeployConfig:
     ):
         if name in raw_dict:
             kwargs[name] = raw_dict[name]
-    return DeployConfig(**kwargs)
+    # Model-specific settings propagated via yaml_extras to the model.
+    if "custom_voice_dir" in raw_dict:
+        kwargs["custom_voice_dir"] = raw_dict["custom_voice_dir"]
+    deploy_cfg = DeployConfig(**kwargs)
+    return deploy_cfg
 
 
 def _extract_platform_overrides(ps: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
@@ -739,6 +746,7 @@ def _build_engine_args(
 def _build_extras(
     ps: StagePipelineConfig,
     ds: StageDeployConfig | None,
+    deploy: DeployConfig | None = None,
 ) -> dict[str, Any]:
     """Assemble ``yaml_extras`` (sampling + connectors + pipeline extras)."""
     extras: dict[str, Any] = {}
@@ -758,6 +766,10 @@ def _build_extras(
         extras["cfg_kv_collect_func"] = ps.cfg_kv_collect_func
     if ps.extras:
         extras.update(ps.extras)
+    # Propagate model-specific deploy settings to extras so they reach
+    # the model via hf_config injection (see build_vllm_config).
+    if deploy is not None and deploy.custom_voice_dir:
+        extras["custom_voice_dir"] = deploy.custom_voice_dir
     return extras
 
 
@@ -796,7 +808,7 @@ def merge_pipeline_deploy(
         stage_type, worker_type = _resolve_execution_mode(ps.execution_type)
         input_proc, next_stage_proc = _select_processor_funcs(ps, deploy.async_chunk)
         engine_args = _build_engine_args(ps, ds, pipeline, deploy, next_stage_proc)
-        extras = _build_extras(ps, ds)
+        extras = _build_extras(ps, ds, deploy)
         runtime: dict[str, Any] = {"process": True}
         if ds is not None:
             runtime["devices"] = ds.devices
