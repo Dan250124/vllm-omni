@@ -240,3 +240,8 @@ fullset = "fullset"
 Vai = "Vai"
 tockens = "tockens"
 CANN = "CANN"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+]

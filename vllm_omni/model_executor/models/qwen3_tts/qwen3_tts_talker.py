@@ -435,6 +435,101 @@ class Qwen3TTSTalkerForConditionalGeneration(nn.Module):
             dict(raw_subtalker_sampling) if isinstance(raw_subtalker_sampling, Mapping) else {}
         )
 
+        # Preloaded persistent custom voices from custom_voice_dir.
+        # Keys are lowercase voice names, values are dicts with:
+        #   speaker_embedding: torch.Tensor (1-D float32 on CPU)
+        #   mode: str ("xvec" or "icl")
+        #   ref_code: torch.Tensor | None
+        #   ref_text: str | None
+        self._preloaded_speakers: dict[str, dict[str, Any]] = {}
+        _cv_dir = getattr(self.config, "custom_voice_dir", None)
+        if _cv_dir and os.path.isdir(_cv_dir):
+            self._load_custom_voices()
+
+    # -------------------- custom voice loading --------------------
+
+    def _load_custom_voices(self) -> None:
+        """Load pre-computed speaker profiles from ``custom_voice_dir``.
+
+        Expects a ``custom_voice_manifest.json`` alongside per-voice
+        ``.safetensors`` files.  Populates ``self._preloaded_speakers`` with
+        speaker embeddings (and optionally ref_code for ICL mode) on CPU.
+        """
+        import json as _json
+
+        from safetensors.torch import safe_open as _safe_open
+
+        manifest_path = os.path.join(self.config.custom_voice_dir, "custom_voice_manifest.json")
+        if not os.path.exists(manifest_path):
+            logger.warning("custom_voice_dir set but manifest not found: %s", manifest_path)
+            return
+
+        try:
+            with open(manifest_path) as f:
+                manifest = _json.load(f)
+        except (OSError, _json.JSONDecodeError) as exc:
+            logger.error("Failed to read custom voice manifest %s: %s", manifest_path, exc)
+            return
+
+        # Validate hidden_size compatibility
+        expected_dim = int(self.config.speaker_encoder_config.enc_dim)
+        manifest_dim = manifest.get("hidden_size")
+        if manifest_dim and manifest_dim != expected_dim:
+            logger.warning(
+                "Custom voice manifest hidden_size=%d differs from model enc_dim=%d. "
+                "Recompute voices for this model variant, or remove custom_voice_dir.",
+                manifest_dim,
+                expected_dim,
+            )
+            # Continue anyway — the per-voice safetensors may still be compatible.
+
+        loaded = 0
+        for name, info in manifest.get("voices", {}).items():
+            st_filename = info.get("file", f"{name}.safetensors")
+            st_path = os.path.join(self.config.custom_voice_dir, st_filename)
+            if not os.path.exists(st_path):
+                logger.warning("Custom voice file not found: %s (voice: %s)", st_path, name)
+                continue
+
+            try:
+                tensors: dict[str, torch.Tensor] = {}
+                with _safe_open(st_path, framework="pt") as f:
+                    for key in f.keys():
+                        tensors[key] = f.get_tensor(key)
+            except Exception as exc:
+                logger.error("Failed to load custom voice %s from %s: %s", name, st_path, exc)
+                continue
+
+            if "speaker_embedding" not in tensors:
+                logger.warning("Missing speaker_embedding in %s, skipping voice '%s'", st_path, name)
+                continue
+
+            profile: dict[str, Any] = {
+                "speaker_embedding": tensors["speaker_embedding"].contiguous(),
+                "mode": info.get("mode", "xvec"),
+                "ref_text": info.get("ref_text"),
+                "speaker_description": info.get("speaker_description"),
+            }
+            if "ref_code" in tensors:
+                profile["ref_code"] = tensors["ref_code"].contiguous()
+
+            self._preloaded_speakers[name.lower()] = profile
+            loaded += 1
+
+            # Pre-warm the voice embedding cache so the first request is a hit.
+            xvec_only = profile["mode"] != "icl"
+            cache_key = self._voice_cache.make_cache_key(name.lower(), xvec_only, created_at=1)
+            self._voice_cache.put(
+                cache_key,
+                {
+                    "ref_spk_embedding": profile["speaker_embedding"],
+                    "ref_code": profile.get("ref_code"),
+                    "icl_mode": not xvec_only,
+                },
+            )
+
+        logger.info("Loaded %d custom voices from %s", loaded, self.config.custom_voice_dir)
+
     # -------------------- vLLM required hooks --------------------
 
     def embed_input_ids(self, input_ids: torch.Tensor, **_: Any) -> torch.Tensor:
@@ -1381,6 +1476,17 @@ class Qwen3TTSTalkerForConditionalGeneration(nn.Module):
                             "icl_mode": _cached.get("icl_mode"),
                         }
                         _voice_cache_key = None  # hit -> don't store again
+
+                    # Fast path: preloaded persistent custom voice (from custom_voice_dir).
+                    if voice_clone_prompt is None:
+                        preloaded = self._preloaded_speakers.get(_voice_name)
+                        if preloaded is not None:
+                            voice_clone_prompt = {
+                                "ref_spk_embedding": preloaded["speaker_embedding"],
+                                "icl_mode": preloaded["mode"] == "icl",
+                            }
+                            if preloaded.get("ref_code") is not None:
+                                voice_clone_prompt["ref_code"] = preloaded["ref_code"]
 
             # Official implementation may pass `voice_clone_prompt.icl_mode`.
             if voice_clone_prompt is not None and "icl_mode" in voice_clone_prompt:

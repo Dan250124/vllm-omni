@@ -472,6 +472,11 @@ def build_vllm_config(
     if upgraded is not vllm_config.quant_config:
         vllm_config = replace(vllm_config, quant_config=upgraded)
 
+    # Inject deploy-level custom_voice_dir into hf_config so it is
+    # accessible to model code and the serving layer.
+    if engine_args_dict.get("custom_voice_dir"):
+        vllm_config.model_config.hf_config.custom_voice_dir = engine_args_dict["custom_voice_dir"]
+
     return vllm_config, executor_class
 
 

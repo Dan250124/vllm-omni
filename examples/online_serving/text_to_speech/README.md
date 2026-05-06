@@ -273,6 +273,73 @@ python qwen3_tts/streaming_speech_client.py --text "..." --simulate-stt --stt-de
 ### Batch client
 `qwen3_tts/batch_speech_client.py` issues many concurrent requests for throughput measurement.
 
+### Custom Voice (pre-computed speaker profiles)
+
+Pre-compute speaker embeddings offline to avoid per-request audio processing and persist voices across server restarts:
+
+```bash
+# 1. Pre-compute a custom voice from reference audio (xvec mode, lightweight)
+python qwen3_tts/precompute_custom_voice.py \
+    --model Qwen/Qwen3-TTS-12Hz-1.7B-Base \
+    --voice-name alice \
+    --ref-audio /path/to/alice_ref.wav \
+    --output-dir ./custom_voices/
+```
+
+This produces `./custom_voices/custom_voice_manifest.json` and per-voice `.safetensors` files.
+
+For better quality, use ICL mode (retains codec tokens, needs `--ref-text`):
+
+```bash
+python qwen3_tts/precompute_custom_voice.py \
+    --model Qwen/Qwen3-TTS-12Hz-1.7B-Base \
+    --voice-name alice \
+    --ref-audio /path/to/alice_ref.wav \
+    --ref-text "The exact transcript of the reference audio." \
+    --mode icl \
+    --output-dir ./custom_voices/
+```
+
+Batch mode — process all voices listed in a JSON manifest:
+
+```bash
+python qwen3_tts/precompute_custom_voice.py \
+    --model Qwen/Qwen3-TTS-12Hz-1.7B-Base \
+    --manifest voices.json \
+    --output-dir ./custom_voices/
+```
+
+```bash
+# 2. Configure custom_voice_dir in the deploy YAML
+```
+
+Edit `vllm_omni/deploy/qwen3_tts.yaml` (or your own deploy config):
+
+```yaml
+custom_voice_dir: "./custom_voices"
+```
+
+```bash
+# 3. Launch the server — preloaded voices are available immediately
+vllm serve Qwen/Qwen3-TTS-12Hz-1.7B-Base --omni --port 8091
+
+# 4. Use the voice by name — no ref_audio needed per request
+python qwen3_tts/openai_speech_client.py --text "Hello world" --voice alice
+
+# Or via curl
+curl -X POST http://localhost:8091/v1/audio/speech \
+    -H "Content-Type: application/json" \
+    -d '{"input": "Hello world", "voice": "alice", "response_format": "wav"}' \
+    --output custom_voice.wav
+```
+
+Two modes are available:
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| **xvec** | `--mode xvec` (default) | Speaker embedding only. Lightweight, small file. |
+| **icl** | `--mode icl` | Speaker embedding + codec tokens (in-context learning). Higher quality, requires `--ref-text`. |
+
 ### Notes
 - Base voice cloning has uniproc-vs-mp tradeoffs depending on per-request reference audio cost; see the executor-backend section above.
 - `vllm_omni/deploy/qwen3_tts.yaml` is the default deploy config (loaded by HF `model_type`); per-stage runtime overrides are available via `--stage-N-<field> <value>`.

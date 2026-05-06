@@ -235,6 +235,40 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
             "Uploaded voices are ephemeral and will be lost on server restart. "
             "Re-upload voices after each restart if needed."
         )
+
+        # Restore persistent custom voices from custom_voice_dir (if configured).
+        _cv_dir = getattr(self.engine_client.model_config.hf_config, "custom_voice_dir", None)
+        self._custom_voice_dir = _cv_dir
+        if _cv_dir:
+            manifest_path = os.path.join(_cv_dir, "custom_voice_manifest.json")
+            if os.path.exists(manifest_path):
+                try:
+                    with open(manifest_path) as f:
+                        manifest = json.load(f)
+                    preloaded_count = 0
+                    for name, info in manifest.get("voices", {}).items():
+                        name_lower = name.lower()
+                        self.uploaded_speakers[name_lower] = {
+                            "name": name,
+                            "consent": "precomputed",
+                            "file_path": os.path.join(_cv_dir, info["file"]),
+                            "created_at": -1.0,  # sentinel: preloaded, not uploaded
+                            "mime_type": "application/x-safetensors",
+                            "file_size": 0,
+                            "ref_text": info.get("ref_text"),
+                            "speaker_description": info.get("speaker_description"),
+                            "embedding_source": "direct",
+                            "embedding_dim": manifest.get("hidden_size", 0),
+                        }
+                        self.supported_speakers.add(name_lower)
+                        preloaded_count += 1
+                    logger.info(
+                        "Loaded %d persistent custom voices from manifest: %s",
+                        preloaded_count,
+                        sorted(manifest.get("voices", {}).keys()),
+                    )
+                except Exception as exc:
+                    logger.error("Failed to load custom voice manifest %s: %s", manifest_path, exc)
         self._tts_tokenizer = None
         self._voxcpm2_tokenizer = None
         self._voxcpm2_split_map: dict[int, list[int]] = {}
@@ -1454,27 +1488,38 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
                 # Check if this voice was uploaded with a pre-computed embedding.
                 # Populate request.speaker_embedding so the existing code path
                 # (below) handles voice_clone_prompt and x_vector_only_mode.
-                embedding = self._get_uploaded_speaker_embedding(request.voice)
-                if embedding is not None:
-                    request.speaker_embedding = embedding
+                if speaker_info.get("created_at") == -1.0:
+                    # Preloaded persistent custom voice (from custom_voice_dir).
+                    # The model already holds the embedding — just set task type.
                     params["task_type"] = ["Base"]
-                    logger.info("Auto-set speaker_embedding for uploaded voice: %s", request.voice)
-                else:
-                    audio_data = self._get_uploaded_audio_data(request.voice)
-                    if not audio_data:
-                        raise ValueError(f"Audio file for uploaded voice '{request.voice}' is missing or corrupted")
-                    stored_ref_text = speaker_info.get("ref_text")
-                    params["ref_audio"] = [audio_data]
-                    params["task_type"] = ["Base"]
-                    params["voice_created_at"] = [speaker_info.get("created_at", 0)]
-                    if stored_ref_text:
-                        params["ref_text"] = [stored_ref_text]
+                    if speaker_info.get("ref_text"):
+                        params["ref_text"] = [speaker_info["ref_text"]]
                         params["x_vector_only_mode"] = [False]
                     else:
                         params["x_vector_only_mode"] = [True]
-                    logger.info(
-                        "Auto-set ref_audio for uploaded voice: %s (icl=%s)", request.voice, bool(stored_ref_text)
-                    )
+                    logger.info("Using preloaded custom voice: %s", request.voice)
+                else:
+                    embedding = self._get_uploaded_speaker_embedding(request.voice)
+                    if embedding is not None:
+                        request.speaker_embedding = embedding
+                        params["task_type"] = ["Base"]
+                        logger.info("Auto-set speaker_embedding for uploaded voice: %s", request.voice)
+                    else:
+                        audio_data = self._get_uploaded_audio_data(request.voice)
+                        if not audio_data:
+                            raise ValueError(f"Audio file for uploaded voice '{request.voice}' is missing or corrupted")
+                        stored_ref_text = speaker_info.get("ref_text")
+                        params["ref_audio"] = [audio_data]
+                        params["task_type"] = ["Base"]
+                        params["voice_created_at"] = [speaker_info.get("created_at", 0)]
+                        if stored_ref_text:
+                            params["ref_text"] = [stored_ref_text]
+                            params["x_vector_only_mode"] = [False]
+                        else:
+                            params["x_vector_only_mode"] = [True]
+                        logger.info(
+                            "Auto-set ref_audio for uploaded voice: %s (icl=%s)", request.voice, bool(stored_ref_text)
+                        )
 
         elif params["task_type"][0] == "CustomVoice":
             params["speaker"] = ["Vivian"]  # Default for CustomVoice
