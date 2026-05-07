@@ -374,8 +374,56 @@ async def omni_run_server_worker(listen_address, sock, args, client_config=None,
 
     # Load logging config for uvicorn if specified
     log_config = get_uvicorn_log_config(args)
-    if log_config is not None:
-        uvicorn_kwargs["log_config"] = log_config
+    if log_config is None:
+        # Default: match vLLM log style (INFO 05-05 21:12:36 message).
+        log_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "fmt": "%(levelname)s %(asctime)s %(message)s",
+                    "datefmt": "%m-%d %H:%M:%S",
+                    "use_colors": None,
+                },
+                "access": {
+                    "()": "uvicorn.logging.AccessFormatter",
+                    "fmt": "%(levelname)s %(asctime)s %(client_addr)s - \"%(request_line)s\" %(status_code)s",
+                    "datefmt": "%m-%d %H:%M:%S",
+                    "use_colors": None,
+                },
+            },
+            "handlers": {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+                "access": {
+                    "formatter": "access",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stdout",
+                },
+            },
+            "loggers": {
+                "uvicorn": {
+                    "handlers": ["default"],
+                    "level": args.uvicorn_log_level.upper(),
+                    "propagate": False,
+                },
+                "uvicorn.error": {
+                    "level": args.uvicorn_log_level.upper(),
+                    "handlers": ["default"],
+                    "propagate": False,
+                },
+                "uvicorn.access": {
+                    "handlers": ["access"],
+                    "level": args.uvicorn_log_level.upper(),
+                    "propagate": False,
+                },
+            },
+        }
+    uvicorn_kwargs["log_config"] = log_config
 
     async with build_async_omni(
         args,
@@ -915,6 +963,10 @@ async def omni_init_app_state(
     state.openai_serving_speech = OmniOpenAIServingSpeech(
         engine_client, state.openai_serving_models, request_logger=request_logger, model_name=model_name
     )
+
+    # Warm up speech pipeline (CUDA Graph capture, torch.compile) so the first
+    # real user request is fast instead of paying a 100s compilation tax.
+    await state.openai_serving_speech.warmup()
 
     state.openai_serving_audio_generate = OmniOpenAIServingAudioGenerate(
         engine_client, state.openai_serving_models, request_logger=request_logger, model_name=model_name
