@@ -388,16 +388,13 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
             model=self.model_name,
         )
         try:
-            _audio_bytes, _media_type = await self._generate_audio_bytes(
-                warmup_req, request_id="speech-warmup"
-            )
+            _audio_bytes, _media_type = await self._generate_audio_bytes(warmup_req, request_id="speech-warmup")
         except Exception as exc:
             logger.warning("Speech warmup failed (non-fatal): %s", exc)
             return
 
         elapsed = time.time() - t0
         logger.info("Speech warmup complete in %.1fs", elapsed)
-
 
     def _get_qwen_tts_expected_speaker_embedding_dim(self) -> int | None:
         """Return the loaded Qwen3-TTS speaker embedding dim, if known.
