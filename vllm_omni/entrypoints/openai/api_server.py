@@ -388,7 +388,7 @@ async def omni_run_server_worker(listen_address, sock, args, client_config=None,
                 },
                 "access": {
                     "()": "uvicorn.logging.AccessFormatter",
-                    "fmt": "%(levelname)s %(asctime)s %(client_addr)s - \"%(request_line)s\" %(status_code)s",
+                    "fmt": '%(levelname)s %(asctime)s %(client_addr)s - "%(request_line)s" %(status_code)s',
                     "datefmt": "%m-%d %H:%M:%S",
                     "use_colors": None,
                 },
