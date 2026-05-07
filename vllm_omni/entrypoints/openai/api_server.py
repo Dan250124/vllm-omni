@@ -963,6 +963,9 @@ async def omni_init_app_state(
     state.openai_serving_speech = OmniOpenAIServingSpeech(
         engine_client, state.openai_serving_models, request_logger=request_logger, model_name=model_name
     )
+    # Warm up speech pipeline (CUDA Graph capture, torch.compile) so the first
+    # real user request is fast instead of paying a 100s compilation tax.
+    await state.openai_serving_speech.warmup()
 
     state.openai_serving_audio_generate = OmniOpenAIServingAudioGenerate(
         engine_client, state.openai_serving_models, request_logger=request_logger, model_name=model_name

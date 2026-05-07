@@ -1,0 +1,67 @@
+ 第一次请求的情况：
+ time curl -X POST http://localhost:8000/v1/audio/speech \
+    -H "Content-Type: application/json" \
+    -d '{
+        "input": "Hello world",
+        "voice": "alice",
+        "response_format": "wav"
+    }' --output custom_voice.wav
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 92302  100 92204    0    98    908      0  0:01:41  0:01:41 --:--:-- 22244
+
+real    1m43.301s
+user    0m0.011s
+sys     0m0.028s
+
+(APIServer pid=128313) INFO 05-06 19:08:30 [serving_speech.py:921] VoxCPM2 serving: built multichar split map (19789 entries)
+(APIServer pid=128313) INFO 05-06 19:08:30 [serving_speech.py:1836] TTS speech request speech-a6241a672fae7897: text='Hello world', voice='alice', model=voxcpm2
+(APIServer pid=128313) INFO 05-06 19:08:30 [orchestrator.py:901] [Orchestrator] _handle_add_request: stage=0 req=speech-a6241a672fae7897 prompt_type=OmniEngineCoreRequest original_prompt_type=dict final_stage=0 num_sampling_params=1
+(APIServer pid=128313) INFO 05-06 19:08:30 [stage_engine_core_client.py:230] [StageEngineCoreClient] Stage-0 adding request: speech-a6241a672fae7897
+(StageEngineCoreProc pid=129333) WARNING 05-06 19:08:30 [gpu_model_runner.py:390] additional_information on request data is deprecated, use model_intermediate_buffer
+(StageEngineCoreProc pid=129333) INFO 05-06 19:08:35 [voxcpm2_talker.py:1193] VoxCPM2: built multichar Chinese split map (19789 entries)
+(StageEngineCoreProc pid=129333) WARNING 05-06 19:08:35 [gpu_model_runner.py:1497] _merge_additional_information_update is deprecated, use _update_intermediate_buffer
+(StageEngineCoreProc pid=129333) INFO 05-06 19:08:36 [voxcpm2_talker.py:739] VoxCPM2: torch.compile applied to: LocDiT, feat_encoder, AudioVAE, scaffold+residual (CUDA Graph, skipping compile), projections
+(StageEngineCoreProc pid=129333) INFO 05-06 19:10:13 [voxcpm2_talker.py:812] CUDA Graph captured for scaffold (batch_size=1)
+(StageEngineCoreProc pid=129333) INFO 05-06 19:10:13 [voxcpm2_talker.py:812] CUDA Graph captured for residual (batch_size=1)
+(APIServer pid=128313) INFO 05-06 19:10:13 127.0.0.1:51424 - "POST /v1/audio/speech HTTP/1.1" 200 OK
+
+
+第二次请求的情况：
+time curl -X POST http://localhost:8000/v1/audio/speech     -H "Content-Type: application/json"     -d '{
+        "input": "Hello world",
+        "voice": "alice",
+        "response_format": "wav"
+    }' --output custom_voice.wav
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 92302  100 92204  100    98   8631      9  0:00:10  0:00:10 --:--:-- 23575
+
+real    0m9.801s
+user    0m0.002s
+sys     0m0.012s
+
+(APIServer pid=128313) INFO 05-06 19:11:13 [serving_speech.py:1836] TTS speech request speech-b796ce8f5d32c5fb: text='Hello world', voice='alice', model=voxcpm2
+(APIServer pid=128313) INFO 05-06 19:11:13 [orchestrator.py:901] [Orchestrator] _handle_add_request: stage=0 req=speech-b796ce8f5d32c5fb prompt_type=OmniEngineCoreRequest original_prompt_type=dict final_stage=0 num_sampling_params=1
+(APIServer pid=128313) INFO 05-06 19:11:13 [stage_engine_core_client.py:230] [StageEngineCoreClient] Stage-0 adding request: speech-b796ce8f5d32c5fb
+(APIServer pid=128313) INFO 05-06 19:11:22 127.0.0.1:54078 - "POST /v1/audio/speech HTTP/1.1" 200 OK
+
+
+第三次请求：
+time curl -X POST http://localhost:8000/v1/audio/speech     -H "Content-Type: application/json"     -d '{
+        "input": "Hello world",
+        "voice": "alice",
+        "response_format": "wav"
+    }' --output custom_voice.wav
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  120k  100  120k  100    98   342k    279 --:--:-- --:--:-- --:--:--  342k
+
+real    0m0.330s
+user    0m0.000s
+sys     0m0.008s
+
+(APIServer pid=128313) INFO 05-06 19:12:25 [serving_speech.py:1836] TTS speech request speech-8e48eaeb91a8eb87: text='Hello world', voice='alice', model=voxcpm2
+(APIServer pid=128313) INFO 05-06 19:12:25 [orchestrator.py:901] [Orchestrator] _handle_add_request: stage=0 req=speech-8e48eaeb91a8eb87 prompt_type=OmniEngineCoreRequest original_prompt_type=dict final_stage=0 num_sampling_params=1
+(APIServer pid=128313) INFO 05-06 19:12:25 [stage_engine_core_client.py:230] [StageEngineCoreClient] Stage-0 adding request: speech-8e48eaeb91a8eb87
+(APIServer pid=128313) INFO 05-06 19:12:26 127.0.0.1:48982 - "POST /v1/audio/speech HTTP/1.1" 200 OK
