@@ -133,7 +133,7 @@ def run_auto_bench(args: argparse.Namespace) -> None:
     try:
         for i in range(1, args.rounds + 1):
             if i > 1:
-                print(f"  Restarting server...")
+                print("  Restarting server...")
                 kill_server()
 
             # Start server
@@ -196,7 +196,7 @@ def main() -> None:
     print(f"Hardware: {hw}")
 
     if args.manual:
-        print(f"Mode: manual")
+        print("Mode: manual")
         print()
         run_manual_bench(args)
     else:
