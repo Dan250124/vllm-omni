@@ -379,6 +379,9 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
 
         t0 = time.time()
         logger.info("Running warmup speech request for model_type=%s", self._tts_model_type)
+        # VoxCPM2 has no predefined speaker presets — "default" means zero-shot
+        # mode (no voice cloning).  The voice field is required by the OpenAI
+        # API schema but semantically ignored by the model.
         warmup_req = OpenAICreateSpeechRequest(
             input="Warmup.",
             voice="default",
