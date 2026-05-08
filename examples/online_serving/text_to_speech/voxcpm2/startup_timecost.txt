@@ -1,5 +1,5 @@
 第一次请求的情况：
-ime curl -X POST http://localhost:8000/v1/audio/speech   -H "Content-Type: application/json"   -d '{"model": "OpenBMB/VoxCPM2", "input": "嗯，那吃完饭去看看有什么新片", "voice": "default"}'   --output output3.wav
+time curl -X POST http://localhost:8000/v1/audio/speech   -H "Content-Type: application/json"   -d '{"model": "OpenBMB/VoxCPM2", "input": "嗯，那吃完饭去看看有什么新片", "voice": "default"}'   --output output3.wav
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100  315k  100  315k  100   103  11567      3  0:00:34  0:00:27  0:00:07 88070
