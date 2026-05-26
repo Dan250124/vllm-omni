@@ -13,11 +13,12 @@
 # limitations under the License.
 """PyTorch Qwen3TTSTokenizerV2 model."""
 
+import inspect
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-import inspect
+
 import numpy as np
 import torch
 from torch import nn
